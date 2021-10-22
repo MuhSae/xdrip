@@ -1,10 +1,16 @@
 package com.eveningoutpost.dexdrip.Services;
 
+import android.app.Activity;
 import android.app.IntentService;
 import android.app.PendingIntent;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.ResolveInfo;
+import android.os.Build;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 
@@ -15,11 +21,13 @@ import com.eveningoutpost.dexdrip.Models.DesertSync;
 import com.eveningoutpost.dexdrip.Models.JoH;
 import com.eveningoutpost.dexdrip.Models.Reminder;
 import com.eveningoutpost.dexdrip.Models.Sensor;
+import com.eveningoutpost.dexdrip.Models.UserError;
 import com.eveningoutpost.dexdrip.Models.UserError.Log;
 import com.eveningoutpost.dexdrip.Models.UserNotification;
 import com.eveningoutpost.dexdrip.UtilityModels.CollectionServiceStarter;
 import com.eveningoutpost.dexdrip.UtilityModels.Constants;
 import com.eveningoutpost.dexdrip.UtilityModels.Inevitable;
+import com.eveningoutpost.dexdrip.UtilityModels.InstalledApps;
 import com.eveningoutpost.dexdrip.UtilityModels.NanoStatus;
 import com.eveningoutpost.dexdrip.UtilityModels.Notifications;
 import com.eveningoutpost.dexdrip.UtilityModels.Pref;
@@ -33,7 +41,15 @@ import com.eveningoutpost.dexdrip.watch.lefun.LeFunEntry;
 import com.eveningoutpost.dexdrip.wearintegration.WatchUpdaterService;
 import com.eveningoutpost.dexdrip.webservices.XdripWebService;
 import com.eveningoutpost.dexdrip.xdrip;
+import android.content.pm.PackageManager;
+import android.provider.Settings;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+
+import static android.os.Build.VERSION.SDK_INT;
+import static android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION;
 import static com.eveningoutpost.dexdrip.Home.startWatchUpdaterService;
 import static com.eveningoutpost.dexdrip.utils.DexCollectionType.getLocalServiceCollectingState;
 
@@ -130,6 +146,49 @@ public class MissedReadingService extends IntentService {
                     (BgReading.getTimeSinceLastReading() < (Constants.HOUR_IN_MS * 6)) &&
                     inTimeFrame()) {
                 Notifications.bgMissedAlert(xdrip.getAppContext());
+                // hier muss jetzt zusätzlich geprüft werden, ob librelink installiert ist und falls ja neu gestartet werden
+                UserError.Log.uel(TAG, "Checking existence of com.librelink.app.de");
+
+                if (SDK_INT >= Build.VERSION_CODES.Q && !Settings.canDrawOverlays(xdrip.getAppContext())) {
+                    Intent i = new Intent(ACTION_MANAGE_OVERLAY_PERMISSION);
+                    startActivity(i);
+                }
+
+                PackageManager mgr = xdrip.getAppContext().getPackageManager();
+                List<PackageInfo> list = mgr.getInstalledPackages(PackageManager.GET_ACTIVITIES);
+                SimpleDateFormat hourSDF = new SimpleDateFormat("HH");
+                SimpleDateFormat minuteSDF = new SimpleDateFormat("mm");
+                Date current = new Date();
+                UserError.Log.uel(TAG, "HOUR:" + hourSDF.format(current));
+                UserError.Log.uel(TAG, "MIN:" + minuteSDF.format(current));
+                if (Integer.parseInt(hourSDF.format(current)) >= 12 && Integer.parseInt(hourSDF.format(current)) <= 13) {
+                    if (Settings.canDrawOverlays(xdrip.getAppContext())) {
+                        for (PackageInfo info : list) {
+                            try {
+                                if (info.packageName.contains("com.freestylelibre.app.de")) {
+                                    UserError.Log.uel(TAG, "activities");
+                                    for (ActivityInfo act : info.activities) {
+                                        if (act.name.contains("com.librelink.app.ui.SplashActivity")) {
+                                            UserError.Log.uel(TAG, "PKG:" + act.packageName);
+                                            UserError.Log.uel(TAG, "ACT:" + act.name);
+                                            ComponentName name = new ComponentName(act.packageName, act.name);
+                                            Intent i = new Intent(Intent.ACTION_MAIN);
+                                            i.addCategory(Intent.CATEGORY_LAUNCHER);
+                                            i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                                            i.setComponent(name);
+                                            startActivity(i);
+                                            UserError.Log.uel(TAG, "ACT: STARTED");
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                UserError.Log.uel(TAG, "error:" + e.getMessage());
+                            }
+                        }
+                    } else {
+                        UserError.Log.uel(TAG, "Overlay Permissions missing");
+                    }
+                }
                 checkBackAfterSnoozeTime(xdrip.getAppContext(), now);
             } else {
 

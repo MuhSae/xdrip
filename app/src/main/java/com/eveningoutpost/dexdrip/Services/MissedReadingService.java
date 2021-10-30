@@ -47,6 +47,7 @@ import android.provider.Settings;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.TimeZone;
 
 import static android.os.Build.VERSION.SDK_INT;
 import static android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION;
@@ -157,11 +158,13 @@ public class MissedReadingService extends IntentService {
                 PackageManager mgr = xdrip.getAppContext().getPackageManager();
                 List<PackageInfo> list = mgr.getInstalledPackages(PackageManager.GET_ACTIVITIES);
                 SimpleDateFormat hourSDF = new SimpleDateFormat("HH");
+                hourSDF.setTimeZone(TimeZone.getTimeZone("UTC"));
                 SimpleDateFormat minuteSDF = new SimpleDateFormat("mm");
+                minuteSDF.setTimeZone(TimeZone.getTimeZone("UTC"));
                 Date current = new Date();
                 UserError.Log.uel(TAG, "HOUR:" + hourSDF.format(current));
                 UserError.Log.uel(TAG, "MIN:" + minuteSDF.format(current));
-                if (Integer.parseInt(hourSDF.format(current)) >= 12 && Integer.parseInt(hourSDF.format(current)) <= 13) {
+                if (Integer.parseInt(hourSDF.format(current)) >= 10 && Integer.parseInt(hourSDF.format(current)) <= 11) {
                     if (Settings.canDrawOverlays(xdrip.getAppContext())) {
                         for (PackageInfo info : list) {
                             try {
